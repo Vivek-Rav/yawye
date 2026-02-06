@@ -5,9 +5,19 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { getUserScans, clearUserScans } from "@/lib/firestore";
 import type { StoredScan } from "@/lib/firestore";
+import dynamic from "next/dynamic";
 import HistoryCard from "@/components/HistoryCard";
 import { formatDate, getFilterStartDate } from "@/lib/utils";
 import type { FilterPeriod } from "@/lib/utils";
+
+const CalorieChart = dynamic(() => import("@/components/CalorieChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-4 mb-5 h-[252px] flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  ),
+});
 
 const filters: { label: string; value: FilterPeriod }[] = [
   { label: "Day", value: "day" },
@@ -115,6 +125,11 @@ export default function HistoryPage() {
           </button>
         ))}
       </div>
+
+      {/* Calorie trend chart */}
+      {!fetchLoading && filteredScans.length > 0 && (
+        <CalorieChart filteredScans={filteredScans} filter={filter} />
+      )}
 
       {/* Clear history button — only when scans exist */}
       {!fetchLoading && allScans.length > 0 && (
