@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GEMINI_PROMPT_TEMPLATE, parseGeminiResponse } from "@/lib/gemini";
 import { stripDataURIPrefix } from "@/lib/utils";
-import { verifyToken } from "@/lib/firebaseAdmin";
+import { verifyToken, getDailyScanCountAdmin } from "@/lib/firebaseAdmin";
 
 // --- in-memory rate limiter (per serverless instance, keyed by uid) ---
 const rateLimits = new Map<string, { count: number; start: number }>();
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 10;
+const DAILY_SCAN_LIMIT = 3;
 
 function isRateLimited(uid: string): boolean {
   const now = Date.now();
@@ -33,17 +34,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const uid = await verifyToken(token);
-    if (!uid) {
+    const identity = await verifyToken(token);
+    if (!identity) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const { uid, email } = identity;
 
-    // --- rate limit ---
+    // --- rate limit (per-minute, in-memory) ---
     if (isRateLimited(uid)) {
       return NextResponse.json(
         { error: "Rate limit exceeded" },
         { status: 429 }
       );
+    }
+
+    // --- daily scan limit (skip for admin) ---
+    const isAdmin = email === process.env.ADMIN_EMAIL;
+    if (!isAdmin) {
+      const todayCount = await getDailyScanCountAdmin(uid);
+      if (todayCount >= DAILY_SCAN_LIMIT) {
+        return NextResponse.json(
+          { error: "Daily scan limit reached. You can scan up to 3 times per day." },
+          { status: 429 }
+        );
+      }
     }
 
     // --- parse body ---
@@ -72,6 +86,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // --- sanitize context (strip control chars, limit to food-related input) ---
+    const sanitizedContext = (context || "")
+      .replace(/[\x00-\x1f\x7f]/g, "") // strip control characters
+      .replace(/[{}[\]]/g, "")          // strip braces that could break JSON prompt
+      .trim();
+
     // --- API key check ---
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -82,6 +102,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // --- validate image format ---
+    if (!/^data:image\/(jpeg|png|gif|webp|heic|heif);base64,/.test(image)) {
+      return NextResponse.json(
+        { error: "Invalid image format" },
+        { status: 400 }
+      );
+    }
+
     const { base64, mimeType } = stripDataURIPrefix(image);
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -89,7 +117,7 @@ export async function POST(request: Request) {
 
     const prompt = GEMINI_PROMPT_TEMPLATE.replace(
       "${userContext}",
-      context || ""
+      sanitizedContext
     );
 
     const response = await model.generateContent([

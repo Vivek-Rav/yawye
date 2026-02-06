@@ -8,6 +8,8 @@ import ScanResultCard from "@/components/ScanResultCard";
 import { saveScan } from "@/lib/firestore";
 import type { ScanResult } from "@/lib/gemini";
 
+const DAILY_SCAN_LIMIT = 3;
+
 export default function ScanPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -20,10 +22,34 @@ export default function ScanPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(DAILY_SCAN_LIMIT);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [limitLoading, setLimitLoading] = useState(true);
+
+  const limitReached = remaining <= 0 && !isAdmin;
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/scan-limit", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRemaining(data.remaining);
+          setIsAdmin(data.isAdmin);
+        }
+      } finally {
+        setLimitLoading(false);
+      }
+    })();
+  }, [user]);
 
   if (loading) {
     return (
@@ -86,6 +112,7 @@ export default function ScanPage() {
     setScanResult(pendingResult);
     setPendingResult(null);
     await saveScan(pendingResult, user.uid, context);
+    setRemaining((prev) => Math.max(0, prev - 1));
   };
 
   const handleDeny = () => {
@@ -126,6 +153,25 @@ export default function ScanPage() {
           <p className="text-gray-500 text-sm">What are you eating today?</p>
         </div>
 
+        {/* Daily scan counter */}
+        {!limitLoading && (
+          <div className="mb-4">
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                Admin — unlimited scans
+              </span>
+            ) : limitReached ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+                Daily limit reached
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-gray-400 border border-white/15">
+                {remaining}/{DAILY_SCAN_LIMIT} scans remaining today
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Image capture area */}
         <div className="bg-white/8 backdrop-blur border border-white/15 rounded-2xl p-5 mb-4">
           {imagePreview ? (
@@ -142,6 +188,13 @@ export default function ScanPage() {
               >
                 ✕ Remove photo
               </button>
+            </div>
+          ) : limitReached ? (
+            <div className="text-center py-6 space-y-2">
+              <p className="text-gray-400 text-sm font-semibold">
+                You've used all {DAILY_SCAN_LIMIT} scans for today.
+              </p>
+              <p className="text-gray-600 text-xs">Come back tomorrow!</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -207,7 +260,7 @@ export default function ScanPage() {
           <button
             type="button"
             onClick={handleScan}
-            disabled={isScanning}
+            disabled={isScanning || limitReached}
             className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold py-4 rounded-xl disabled:opacity-50 transition-opacity"
           >
             {isScanning ? (
@@ -215,6 +268,8 @@ export default function ScanPage() {
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Analyzing...
               </span>
+            ) : limitReached ? (
+              "Daily limit reached"
             ) : (
               "Analyze Calories"
             )}

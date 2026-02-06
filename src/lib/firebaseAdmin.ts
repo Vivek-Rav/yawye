@@ -18,12 +18,27 @@ function getAdminApp(): admin.app.App {
   return _app;
 }
 
-// Returns the uid if the token is valid, null otherwise.
-export async function verifyToken(token: string): Promise<string | null> {
+// Returns uid + email if the token is valid, null otherwise.
+export async function verifyToken(
+  token: string
+): Promise<{ uid: string; email: string } | null> {
   try {
     const decoded = await admin.auth(getAdminApp()).verifyIdToken(token);
-    return decoded.uid;
+    return { uid: decoded.uid, email: decoded.email || "" };
   } catch {
     return null;
   }
+}
+
+// Count how many scans a user has saved today (server-side via Admin SDK).
+export async function getDailyScanCountAdmin(uid: string): Promise<number> {
+  const db = admin.firestore(getAdminApp());
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const snapshot = await db
+    .collection("scans")
+    .where("userId", "==", uid)
+    .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startOfToday))
+    .get();
+  return snapshot.size;
 }
