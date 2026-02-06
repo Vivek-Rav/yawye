@@ -69,7 +69,7 @@ export default function CalorieChart({
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart
           data={data}
-          margin={{ top: 5, right: 5, bottom: 0, left: -20 }}
+          margin={{ top: 5, right: 5, bottom: 0, left: 0 }}
         >
           <defs>
             <linearGradient id="calorieGradient" x1="0" y1="0" x2="0" y2="1">

@@ -63,6 +63,40 @@ export default function ScanResultCard({ result }: { result: ScanResult }) {
           </div>
         </div>
 
+        {/* Burn It Off */}
+        {result.burnOff && (
+          <div>
+            <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
+              Burn It Off
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                <span className="text-lg mr-1.5">🏃</span>
+                <span className="text-gray-400 text-xs">Treadmill</span>
+                <p className="text-white text-sm font-semibold mt-0.5">{result.burnOff.treadmill}</p>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                <span className="text-lg mr-1.5">🚴</span>
+                <span className="text-gray-400 text-xs">Cycling</span>
+                <p className="text-white text-sm font-semibold mt-0.5">{result.burnOff.cycling}</p>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                <span className="text-lg mr-1.5">🚶</span>
+                <span className="text-gray-400 text-xs">Walking</span>
+                <p className="text-white text-sm font-semibold mt-0.5">{result.burnOff.walking}</p>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                <span className="text-lg mr-1.5">🏃‍♂️</span>
+                <span className="text-gray-400 text-xs">Running</span>
+                <p className="text-white text-sm font-semibold mt-0.5">{result.burnOff.running}</p>
+              </div>
+            </div>
+            <p className="text-amber-400 italic text-sm text-center mt-2">
+              🔥 {result.burnOff.burnComment}
+            </p>
+          </div>
+        )}
+
         {/* Humor divider */}
         <div className="border-t border-white/10 pt-3">
           <p className="text-violet-300 italic text-sm text-center">
