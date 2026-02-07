@@ -89,8 +89,9 @@ src/
 - Auth state is managed via `AuthContext` — always use `useAuth()` hook in components
 
 ### Input Validation (Enforced in API Routes)
+- Request body: Content-Length pre-check rejects payloads >6 MB before JSON parsing; malformed JSON returns 400
 - Image: max 5 MB, must match `data:image/(jpeg|png|gif|webp|heic|heif);base64,`
-- Context text: max 500 characters, control characters stripped, braces removed (JSON injection prevention)
+- Context text: max 500 characters, control characters stripped, braces/backticks/`${` removed (prompt injection prevention)
 - All user input is sanitized before being interpolated into prompts
 
 ### Rate Limiting
@@ -113,7 +114,10 @@ Client-safe (prefixed with `NEXT_PUBLIC_`):
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`
 
 ### HTTP Security Headers
-Configured in `next.config.mjs` — includes HSTS, X-Frame-Options DENY, CSP-adjacent headers, and camera/microphone permissions restricted to self. Do not weaken or remove these headers.
+Configured in `next.config.mjs` — includes HSTS, X-Frame-Options DENY, Content-Security-Policy, and camera/microphone permissions restricted to self. Do not weaken or remove these headers. CSP whitelists Firebase, Google Auth, and Gemini API domains; update it if adding new external services.
+
+### Firestore Security Rules
+Defined in `firestore.rules` — enforces user isolation (`userId == request.auth.uid`) on the `scans` collection. Scans are immutable (no updates allowed). Deploy with `firebase deploy --only firestore:rules`.
 
 ### Security Rules for Contributors
 - Never log sensitive data (tokens, API keys, user emails) in production
@@ -170,7 +174,7 @@ npm run dev                   # http://localhost:3000
 - **Firestore `scans` collection:** All scan data lives in a single `scans` collection, filtered by `userId`. There are no composite indexes — queries sort client-side in `getUserScans()`. Add Firestore indexes if you add server-side ordering or compound filters.
 - **CalorieChart SSR:** Recharts requires browser APIs. `CalorieChart` must be imported with `next/dynamic` and `ssr: false`. Do not convert to a regular import.
 - **Next.js Link same-route navigation:** The app uses `window.location.href` for same-route reloads (e.g., reset scan page) because Next.js `<Link>` is a no-op when the href matches the current route.
-- **Daily scan limit timezone:** `getDailyScanCountAdmin()` uses the server's local midnight (`setHours(0,0,0,0)`), not UTC. This means the reset time depends on the deployment region.
+- **Daily scan limit timezone:** The client sends its IANA timezone via the `x-timezone` header. The server validates it with `isValidTimezone()` and falls back to UTC. `getDailyScanCountAdmin()` computes start-of-day in the client's timezone so limits reset at the user's local midnight.
 
 ## Testing
 

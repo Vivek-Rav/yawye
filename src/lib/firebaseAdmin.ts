@@ -30,11 +30,37 @@ export async function verifyToken(
   }
 }
 
+// Validate an IANA timezone string (e.g. "Asia/Singapore").
+export function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Get the UTC instant corresponding to midnight (start of today) in the given timezone.
+function getStartOfDayInTimezone(timezone: string): Date {
+  const now = new Date();
+  // "en-CA" locale formats as YYYY-MM-DD
+  const dateStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+  // Compute the offset between UTC and the target timezone at midnight
+  const midnightUTC = new Date(dateStr + "T00:00:00Z");
+  const utcStr = midnightUTC.toLocaleString("en-US", { timeZone: "UTC" });
+  const tzStr = midnightUTC.toLocaleString("en-US", { timeZone: timezone });
+  const offsetMs = new Date(utcStr).getTime() - new Date(tzStr).getTime();
+  return new Date(midnightUTC.getTime() + offsetMs);
+}
+
 // Count how many scans a user has saved today (server-side via Admin SDK).
-export async function getDailyScanCountAdmin(uid: string): Promise<number> {
+// Uses the client's timezone so the daily limit resets at the user's local midnight.
+export async function getDailyScanCountAdmin(
+  uid: string,
+  timezone: string = "UTC"
+): Promise<number> {
   const db = admin.firestore(getAdminApp());
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = getStartOfDayInTimezone(timezone);
   const snapshot = await db
     .collection("scans")
     .where("userId", "==", uid)

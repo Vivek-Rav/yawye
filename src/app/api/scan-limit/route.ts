@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyToken, getDailyScanCountAdmin } from "@/lib/firebaseAdmin";
+import { verifyToken, getDailyScanCountAdmin, isValidTimezone } from "@/lib/firebaseAdmin";
 
 const DAILY_SCAN_LIMIT = 3;
 
@@ -19,8 +19,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rawTz = request.headers.get("x-timezone") || "UTC";
+    const timezone = isValidTimezone(rawTz) ? rawTz : "UTC";
+
     const isAdmin = identity.email === process.env.ADMIN_EMAIL;
-    const todayCount = await getDailyScanCountAdmin(identity.uid);
+    const todayCount = await getDailyScanCountAdmin(identity.uid, timezone);
     const remaining = Math.max(0, DAILY_SCAN_LIMIT - todayCount);
 
     return NextResponse.json({ remaining, isAdmin });

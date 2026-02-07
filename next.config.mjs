@@ -14,6 +14,19 @@ const nextConfig = {
             value: "max-age=63072000; includeSubDomains; preload",
           },
           { key: "X-XSS-Protection", value: "1; mode=block" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.googleusercontent.com",
+              "font-src 'self'",
+              "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://generativelanguage.googleapis.com",
+              "frame-src https://accounts.google.com https://*.firebaseapp.com",
+              "media-src blob:",
+            ].join("; "),
+          },
         ],
       },
     ];

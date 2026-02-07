@@ -38,7 +38,10 @@ export default function ScanPage() {
       try {
         const token = await user.getIdToken();
         const res = await fetch("/api/scan-limit", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
         });
         if (res.ok) {
           const data = await res.json();
@@ -86,6 +89,7 @@ export default function ScanPage() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         body: JSON.stringify({ image: imagePreview, context }),
       });

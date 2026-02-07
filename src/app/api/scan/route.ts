@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GEMINI_PROMPT_TEMPLATE, parseGeminiResponse } from "@/lib/gemini";
 import { stripDataURIPrefix } from "@/lib/utils";
-import { verifyToken, getDailyScanCountAdmin } from "@/lib/firebaseAdmin";
+import { verifyToken, getDailyScanCountAdmin, isValidTimezone } from "@/lib/firebaseAdmin";
 
 // --- in-memory rate limiter (per serverless instance, keyed by uid) ---
 const rateLimits = new Map<string, { count: number; start: number }>();
@@ -48,10 +48,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // --- reject oversized payloads before parsing ---
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 6_000_000) {
+      return NextResponse.json(
+        { error: "Request too large" },
+        { status: 413 }
+      );
+    }
+
+    // --- resolve client timezone (fallback to UTC) ---
+    const rawTz = request.headers.get("x-timezone") || "UTC";
+    const timezone = isValidTimezone(rawTz) ? rawTz : "UTC";
+
     // --- daily scan limit (skip for admin) ---
     const isAdmin = email === process.env.ADMIN_EMAIL;
     if (!isAdmin) {
-      const todayCount = await getDailyScanCountAdmin(uid);
+      const todayCount = await getDailyScanCountAdmin(uid, timezone);
       if (todayCount >= DAILY_SCAN_LIMIT) {
         return NextResponse.json(
           { error: "Daily scan limit reached. You can scan up to 3 times per day." },
@@ -60,11 +73,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // --- parse body ---
-    const { image, context } = (await request.json()) as {
-      image: string;
-      context?: string;
-    };
+    // --- parse body (catch malformed JSON) ---
+    let body: { image?: string; context?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+    const { image, context } = body as { image: string; context?: string };
 
     // --- input validation ---
     if (!image) {
@@ -86,11 +105,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- sanitize context (strip control chars, limit to food-related input) ---
+    // --- sanitize context (strip control chars, template syntax, and structural chars) ---
     const sanitizedContext = (context || "")
       .replace(/[\x00-\x1f\x7f]/g, "") // strip control characters
-      .replace(/[{}[\]]/g, "")          // strip braces that could break JSON prompt
-      .trim();
+      .replace(/[{}[\]`]/g, "")         // strip braces and backticks
+      .replace(/\$\{/g, "")            // strip template literal syntax
+      .trim()
+      .slice(0, 500);                  // enforce max length after sanitization
 
     // --- API key check ---
     const apiKey = process.env.GEMINI_API_KEY;
